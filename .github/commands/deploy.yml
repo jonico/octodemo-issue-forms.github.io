@@ -1,0 +1,15 @@
+trigger: deploy
+title: Deploy Octocat Generator
+description: Deploy Octocat Generator in a cloud
+surfaces:
+- pull_request
+steps:
+- type: menu
+  id: cloud
+  label: Cloud
+  options:
+    - aws
+    - azure
+    - gcp
+- type: fill
+  template: "/deploy {{ data.cloud }}"

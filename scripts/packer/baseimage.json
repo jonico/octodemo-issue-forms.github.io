@@ -1,0 +1,41 @@
+{
+  "variables": {
+    "aws_access_key": "",
+    "aws_secret_key": ""
+  },
+  "builders": [
+    {
+      "type": "amazon-ebs",
+      "access_key": "{{user `aws_access_key`}}",
+      "secret_key": "{{user `aws_secret_key`}}",
+      "region": "us-east-2",
+      "source_ami_filter": {
+        "filters": {
+          "virtualization-type": "hvm",
+          "name": "bitnami-ruby-2.6.3-*",
+          "root-device-type": "ebs"
+        },
+        "owners": "979382823631",
+        "most_recent": true
+      },
+      "instance_type": "t2.micro",
+      "ssh_username": "bitnami",
+      "ami_name": "jekyll-3.8.5-{{timestamp}}"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": ["sudo mkdir -p /opt/bitnami/projects/jekyll", "sudo chown -R $USER /opt/bitnami/projects/jekyll" ]
+    },
+    {
+      "type": "file",
+      "source": "./",
+      "destination": "/opt/bitnami/projects/jekyll"
+    },
+    {
+      "type": "shell",
+      "inline": ["cd /opt/bitnami/projects/jekyll", "sudo gem install bundler", "bundle install" ]
+    }
+  ]
+}

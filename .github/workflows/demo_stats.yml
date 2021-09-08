@@ -1,0 +1,112 @@
+name: Generate demo stats
+on:
+  repository_dispatch:
+    types: demo_stats
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Output command context
+        env:
+          COMMAND_CONTEXT: ${{ toJSON(github.event.client_payload) }}
+        run: echo "$COMMAND_CONTEXT"
+
+      - name: Create Date Stamp
+        run: |
+          d=$( echo "$(date +'%Y%m%d%H%M%S')")
+          echo "DATE_STAMP=$( echo $d)" >> $GITHUB_ENV
+
+      - name: Determine User/Org to grab stats for
+        id: get_owner
+        uses: actions/github-script@v3
+        with:
+          script: |
+            try {
+              core.setOutput('owner', '${{ github.event.client_payload.data.Alternate }}' != ''? '${{ github.event.client_payload.data.Alternate }}'.toLowerCase():'${{ github.event.client_payload.data.Owner }}'.toLowerCase())
+            } catch (err) {
+              core.setFailed(`Action failed with error ${err}`);
+            }
+
+      - name: Screenshot Website
+        id: screenshot_website
+        uses: swinton/screenshot-website@v1.0.0
+        with:
+          delay: 10
+          source: https://coderstats.net/github/#${{ steps.get_owner.outputs.owner }}
+          destination: screenshot_${{ steps.get_owner.outputs.owner }}_${{ github.event.client_payload.command.resource.number }}_${{ github.event.client_payload.command.resource.id }}_${{ env.DATE_STAMP }}.png
+
+      # Add image to repo
+      # Checkout repo
+
+      - name: Get the PR Branch
+        id: get_branch
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              pr = await github.pulls.get(
+                {
+                  ...context.repo,
+                  pull_number: ${{ github.event.client_payload.command.resource.number }}
+                }
+              )
+              if (pr.status !== 200) {
+                message = 'Could not retrieve PR info: ${permissionRes.status}'
+                core.setOutput('error', message)
+                throw new Error(message)
+              }
+              core.setOutput('branch', pr.data.head.ref)
+            } catch (err) {
+              core.setFailed(`Action failed with error ${err}`);
+            }
+
+      - name: Check out the PR Branch
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.get_branch.outputs.branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name:  Add image to repo
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git status
+          mkdir -p assets/images/
+          mv  ${{ steps.screenshot_website.outputs.path}} assets/images/screenshot_${{ steps.get_owner.outputs.owner }}_${{ github.event.client_payload.command.resource.number }}_${{ env.DATE_STAMP }}.png
+          git add assets/images/screenshot_${{ steps.get_owner.outputs.owner }}_${{ github.event.client_payload.command.resource.number }}_${{ env.DATE_STAMP }}.png
+          git commit -m "added assets/images/screenshot_${{ steps.get_owner.outputs.owner }}_${{ github.event.client_payload.command.resource.number }}_${{ env.DATE_STAMP }}.png"
+          cp assets/images/screenshot_${{ steps.get_owner.outputs.owner }}_${{ github.event.client_payload.command.resource.number }}_${{ env.DATE_STAMP }}.png assets/images/org_stats.png
+          git add assets/images/org_stats.png
+          git commit -m "updated assets/images/org_stats.png"
+          git push
+          git status
+
+      # Use the image in the comment added below
+
+      - name: Acknowledge Comment
+        id: acknowledge_comment
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+                return await github.issues.createComment({
+                  ...context.repo,
+                  issue_number: ${{ github.event.client_payload.command.resource.number }},
+                  body: `## Coder Stats for ${{ steps.get_owner.outputs.owner }}<br clear="all"/>\n
+              ### Interested in your coder stats?
+
+              [![https://github.com/octodemo/octodemo.github.io/blob/${{ steps.get_branch.outputs.branch }}/assets/images//screenshot_${{ steps.get_owner.outputs.owner }}_${{ github.event.client_payload.command.resource.number }}_${{ env.DATE_STAMP }}.png?raw=true](https://github.com/octodemo/octodemo.github.io/blob/${{ steps.get_branch.outputs.branch }}/assets/images//screenshot_${{ steps.get_owner.outputs.owner }}_${{ github.event.client_payload.command.resource.number }}_${{ env.DATE_STAMP }}.png?raw=true)](https://coderstats.net/github/#${{ steps.get_owner.outputs.owner }})
+
+              See more at https://coderstats.net/github/#${{ steps.get_owner.outputs.owner }}
+
+              To include in your octocat generator web site, use this snippet
+
+              \`\`\`html
+              <img class="mx-auto" src="{{ '/assets/images/org_stats.png' | relative_url }}" alt="Custom stats" />
+              \`\`\``
+                });
+            } catch (err) {
+              core.setFailed(`Action failed with error ${err}`);
+            }

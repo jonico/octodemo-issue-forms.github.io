@@ -1,0 +1,135 @@
+name: "Comment based deploy"
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  permission:
+    name: permission check
+    runs-on: ubuntu-latest
+    if: github.event.issue.pull_request != '' && startsWith(github.event.comment.body, '/deploy ')
+    outputs:
+      cloud: ${{ steps.prechecks.outputs.cloud  }}
+      customer: ${{ steps.prechecks.outputs.customer }}
+    steps:
+    - name: Check permissions and label
+      id: prechecks
+      uses: actions/github-script@v3
+      env:
+        comment: ${{ github.event.comment.body }}
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          const comment = process.env.comment
+          try {
+            let cloud = comment.match(/^\/deploy (\w+)/)[1]
+            core.info("Cloud: " + cloud)
+            core.setOutput('cloud',  cloud)
+          } catch (Error) {
+            message = "Could not parse deployment comment, did you specify a valid cloud?"
+            core.setOutput('error', message)
+            throw new Error(message)
+          }
+
+          const permissionRes = await github.repos.getCollaboratorPermissionLevel(
+            {
+              ...context.repo,
+              username: context.actor
+            }
+          )
+          if (permissionRes.status !== 200) {
+            message = 'Permission check returns non-200 status: ${permissionRes.status}'
+            core.setOutput('error', message)
+            throw new Error(message)
+          }
+          const actorPermission = permissionRes.data.permission
+          if (!['admin', 'write'].includes(actorPermission)) {
+              message = '👋  @' + context.actor + ', seems as if you have not admin/write permission to deploy this PR, permissions: ${actorPermission}'
+              core.setOutput('error', message)
+              throw new Error(message)
+          }
+
+          pr = await github.pulls.get(
+            {
+              ...context.repo,
+              pull_number: context.issue.number
+            }
+            )
+          if (pr.status !== 200) {
+            message = 'Could not retrieve PR info: ${permissionRes.status}'
+            core.setOutput('error', message)
+            throw new Error(message)
+          }
+
+
+          core.setOutput('customer', pr.data.head.ref)
+    - name: Pre-Check-Failed
+      id: precheck-failed
+      if: failure()
+      uses: actions/github-script@v3
+      env:
+        message: ${{steps.prechecks.outputs.error}}
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          const { message } = process.env;
+          github.issues.createComment({
+            ...context.repo,
+            issue_number: context.issue.number,
+            body: message
+          })
+
+  deployment:
+    name: Deployment via comment
+    needs: permission
+    runs-on: ubuntu-latest
+    if: |
+        needs.permission.outputs.cloud == 'azure' ||
+        needs.permission.outputs.cloud == 'gcp' ||
+        needs.permission.outputs.cloud == 'aws'
+    steps:
+    - name: context
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+      run: echo "$GITHUB_CONTEXT"
+    - name: ACK deployment request
+      uses: actions/github-script@v3
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '👋 @' + context.actor + ', deployment request for ${{ needs.permission.outputs.cloud }} received ...'
+          })
+          github.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['${{ needs.permission.outputs.cloud}}']
+          })
+    - name: Kicking off deployment
+      uses: actions/github-script@v3
+      env:
+        cloud: ${{ needs.permission.outputs.cloud }}
+        customer: ${{ needs.permission.outputs.customer }}
+      with:
+        github-token: ${{secrets.GPR_PAT}}
+        script: |
+          const { cloud, customer } = process.env;
+          let customerNormalized = customer.replace(/[^a-zA-Z0-9_\-]*/g, '')
+          let gprUrl='docker.pkg.github.com/'+context.repo.owner.toLowerCase()+'/'+context.repo.repo.toLowerCase()+'/octocat-generator-docker:'+customerNormalized
+          github.repos.createDeployment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref:  customerNormalized,
+            task: 'deploy-to-' + cloud,
+            auto_merge: false,
+            required_contexts: [],
+            environment: cloud + '-' + customerNormalized + '-' + context.issue.number,
+            description: 'Production environment for ' + customer + ' on ' + cloud,
+            payload:  { customer: customer, cloud: cloud, gprUrl: gprUrl, issue: context.issue.number, customerNormalized: customerNormalized },
+            production_environment: false,
+            transient_environment: false
+          })

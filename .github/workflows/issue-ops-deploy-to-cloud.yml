@@ -1,0 +1,84 @@
+on:
+  issue_comment:
+    types: [created]
+name: React on issue comments
+jobs:
+  check-approval:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.issue.title, 'Deploy Octocat Generator on') && startsWith(github.event.comment.body, '/approve')
+    steps:
+      - name: Run Issue form parser
+        id: parse
+        uses: peter-murray/issue-forms-body-parser@v1.0.0
+        with:
+          issue_id: ${{ github.event.issue.number }}
+          separator: '###'
+          label_marker_start: ' '
+          label_marker_end: ' '
+    
+      - name: Do we need approval from somebody else?
+        if: github.event.issue.user.login == github.event.comment.user.login
+        uses: actions/github-script@v3
+        env:
+          ISSUE_PAYLOAD: ${{ steps.parse.outputs.payload }}
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const issuePayload = JSON.parse(process.env.ISSUE_PAYLOAD);
+            const customer = issuePayload[" Customer"]
+            const prodDeployment = issuePayload[' Is this a production deployment?'].startsWith('- [x]')
+            if (prodDeployment) {
+              let error = '👋 @' + context.actor + ', you cannot approve your own deployment for customer ' + customer + ' , somebody else has to add an ```/approve``` comment.'
+              github.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: error
+              })
+              core.error(error);
+              core.setFailed(error);
+              throw new Error(error)
+            }
+      
+      - name: Approval granted
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '👋 @' + context.actor + ', approval granted, creating deployment request ...'
+            })
+      - name: Kicking off deployment
+        uses: actions/github-script@v3
+        env:
+          title: ${{ github.event.issue.title }}
+          body: ${{ github.event.issue.body }}
+          ISSUE_PAYLOAD: ${{ steps.parse.outputs.payload }}
+        with:
+          github-token: ${{secrets.GPR_PAT}}
+          script: |
+            const issuePayload = JSON.parse(process.env.ISSUE_PAYLOAD);
+            const customer = issuePayload[" Customer"]
+            const prodDeployment = issuePayload[' Is this a production deployment?'].startsWith('- [x]')
+            
+            let title = process.env.title;
+            core.info('Title: ' + title)
+            let cloud = title.match(/^Deploy Octocat Generator on (.*)/)[1]
+            let customerNormalized = customer.replace(/[^a-zA-Z0-9_\-]*/g, '')
+            let gprUrl='docker.pkg.github.com/'+context.repo.owner.toLowerCase()+'/'+context.repo.repo.toLowerCase()+'/octocat-generator-docker:'+customerNormalized
+            github.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref:  customerNormalized,
+              task: 'deploy-to-' + cloud,
+              auto_merge: false,
+              required_contexts: [],
+              environment: cloud + '-' + customerNormalized + '-' + context.issue.number,
+              description: 'Production environment for ' + customer + ' on ' + cloud,
+              payload:  { customer: customer, cloud: cloud, gprUrl: gprUrl, issue: context.issue.number, customerNormalized: customerNormalized, prodDeployment: prodDeployment },
+              production_environment: false,
+              transient_environment: false
+            })

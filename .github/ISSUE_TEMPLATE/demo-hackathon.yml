@@ -1,0 +1,47 @@
+---
+name: Deploy Octocat Generator Hackathon
+description: This is a form to allow folks to more quickly deploy the Octocat Generator Demo
+labels: [hackathon]
+title: Demo for <customer name>
+body:
+- type: markdown
+  attributes:
+    value: |
+      You can see a successful deployment in the environments tab
+      ![image](https://user-images.githubusercontent.com/1872314/116984190-491e6780-accb-11eb-9f36-88448509c037.png)
+      
+      If this is a production deployment, somebody else but the author has to approve this deployment request.
+      Approvals (including self-approvals) are done by adding a ```/approve``` issue comment.
+- type: input
+  id: customer
+  attributes:
+    label: Customer
+    description: "This name will be incorporated into the issue title"
+  validations:
+    required: true
+- type: input
+  id: imageURL
+  attributes:
+    label: Image URL
+    description: "_A logo is usually a good idea._<br>We will use this to generate a custom image for the demo"
+  validations:
+    required: false
+- type: dropdown
+  id: platform
+  attributes:
+    label: Platform
+    description: "Choose the cloud platform to deploy on"
+    options:
+      - azure
+      - aws
+      - gcp    
+  validations:
+    required: true
+- type: checkboxes
+  id: production
+  attributes:
+    label: Is this a production deployment?
+    description: If this deploys to prod, you cannot self-approve.
+    options:
+      - label: This is a production deployment
+        required: false

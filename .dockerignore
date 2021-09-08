@@ -1,0 +1,10 @@
+Gemfile
+Gemfile.lock
+scripts/** 
+package.json
+gulpfile.js
+README.md
+app.json
+azure-pipelines.yml
+Rakefile
+static.json

@@ -1,0 +1,32 @@
+trigger:           create_demo_stats
+title:             Create demo org stats
+description:       Create image with GitHub org stats in PR
+surfaces:
+- pull_request  
+steps:
+- type: form
+  style: modal
+  body:
+  - type:          markdown
+    attributes:
+      value: >-
+        This dialog will create a picture ```org_stats.png``` with your user/org's stats from [coderstats](https://coderstats.net/) to reference in a PR.
+        Example: ![image](https://user-images.githubusercontent.com/1872314/118403869-c1444000-b670-11eb-942b-f6b83e4ab4a2.png)
+  - type: dropdown
+    attributes:
+      label: Owner
+      description: The GitHub org / user to create stats for in this PR
+      options:
+# Begin Org/User List
+      - label: 🐙 octodemo
+        value: octodemo
+  - type:          input
+    attributes:
+      label:       Alternate
+      description: 'Your choice not in the list? Enter organization or user name in the box above.'
+
+  actions:
+    submit:        "Create stats image"
+    cancel:        "Cancel"
+- type: repository_dispatch
+  eventType: demo_stats

@@ -1,0 +1,10 @@
+# kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: octocat-generator-kubernetes
+resources:
+- deployment.yaml
+images:
+- name: jonico/octocat-generator
+  newName: jonico/octocat-generator
+  newTag: latest

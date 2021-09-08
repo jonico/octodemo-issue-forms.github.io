@@ -1,0 +1,29 @@
+---
+name: Deploy Octocat Generator on GCP
+description: Deploy Octocat Generator on Google Cloud Platform
+labels: [gcp]
+title: Deploy Octocat Generator on GCP
+body:
+- type: markdown
+  attributes:
+    value: |
+      Please enter the name of your customer :point_down: here to deploy the created demo to GCP. You can see the successful deployment in the environments tab
+      ![image](https://user-images.githubusercontent.com/1872314/116984190-491e6780-accb-11eb-9f36-88448509c037.png)
+      
+      If this is a production deployment, somebody else but the author has to approve this deployment request.
+      Approvals (including self-approvals) are done by adding a ```/approve``` issue comment.
+- type: input
+  id: customer
+  attributes:
+    label: Customer
+    placeholder: "Use same name as for demo issue"
+  validations:
+    required: true
+- type: checkboxes
+  id: production
+  attributes:
+    label: Is this a production deployment?
+    description: If this deploys to prod, you cannot self-approve.
+    options:
+      - label: Production deployment
+        required: false

@@ -1,0 +1,36 @@
+name: Bootstrap Repository
+on: [push]
+
+jobs:
+  bootstrap:
+    if: endsWith(github.ref, '/master') && github.repository != 'octodemo/octodemo.github.io' && !startsWith(github.repository,'jonico/')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Create cloud deployment labels
+      uses: actions/github-script@v3
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.createLabel(
+            {
+              ...context.repo,
+              name: 'aws'
+            }
+          )
+          github.issues.createLabel(
+            {
+              ...context.repo,
+              name: 'gcp'
+            }
+          )
+          github.issues.createLabel(
+            {
+              ...context.repo,
+              name: 'azure'
+            }
+          )
+    - uses: actions/checkout@v1
+    - name: Bootstrap repo
+      run: ./scripts/bootstrap.sh
+      env:
+        GITHUB_COM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
